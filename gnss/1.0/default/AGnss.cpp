@@ -182,13 +182,15 @@ Return<bool> AGnss::setServer(IAGnssCallback::AGnssType type,
 }
 
 Return<bool> AGnss::dataConnOpen(const hidl_string& apn, IAGnss::ApnIpType apnIpType) {
+    ALOGI("%s: %s, %d", __func__, apn.c_str(), static_cast<uint16_t>(apnIpType));
     if (mAGnssIface == nullptr) {
         ALOGE("%s: AGnss interface is unavailable", __func__);
         return false;
     }
 
-    return (mAGnssIface->data_conn_open_with_apn_ip_type(apn.c_str(),
-                                                     static_cast<uint16_t>(apnIpType)) == 0);
+    //return (mAGnssIface->data_conn_open_with_apn_ip_type(apn.c_str(),
+    //                                                 static_cast<uint16_t>(apnIpType)) == 0);
+    return (mAGnssIface->data_conn_open(apn.c_str()));
 }
 
 }  // namespace implementation
