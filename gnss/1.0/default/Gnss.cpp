@@ -19,6 +19,8 @@
 #include "Gnss.h"
 #include <GnssUtils.h>
 
+#include <time.h>
+
 namespace android {
 namespace hardware {
 namespace gnss {
@@ -49,6 +51,9 @@ GpsCallbacks Gnss::sGnssCb = {
 uint32_t Gnss::sCapabilitiesCached = 0;
 uint16_t Gnss::sYearOfHwCached = 0;
 
+int64_t Gnss::sTimeStampOffset = 0;
+GpsUtcTime Gnss::sLastLocationTime = 0;
+
 Gnss::Gnss(gps_device_t* gnssDevice) :
         mDeathRecipient(new GnssHidlDeathRecipient(this)) {
     /* Error out if an instance of the interface already exists. */
@@ -78,6 +83,31 @@ void Gnss::locationCb(GpsLocation* location) {
         ALOGE("%s: Invalid location from GNSS HAL", __func__);
         return;
     }
+
+    GpsUtcTime timestamp = location->timestamp;
+    GpsUtcTime adjTimestamp = timestamp + sTimeStampOffset;
+    int64_t tsDiff = adjTimestamp - sLastLocationTime;
+    if (tsDiff < 0 || tsDiff > 60000) {
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        int64_t tsSec = timestamp / 1000;
+        int64_t tsSecDiff = ts.tv_sec - tsSec;
+
+        if (tsSecDiff < -30 || tsSecDiff > 30) {
+            //sTimeStampOffset = ((tsSecDiff + 29) / 60) * 60 * 1000;
+            sTimeStampOffset = tsSecDiff * 1000;
+            adjTimestamp = timestamp + sTimeStampOffset;
+
+            ALOGW("%s: Invalid location timestamp, using offset: %lld, "
+                "original ts: %lld, adjusted ts: %lld, system ts (seconds): %ld",
+                __func__, sTimeStampOffset, timestamp, adjTimestamp, ts.tv_sec);
+        } else {
+            sTimeStampOffset = 0;
+            adjTimestamp = timestamp;
+        }
+    }
+    location->timestamp = adjTimestamp;
+    sLastLocationTime = adjTimestamp;
 
     android::hardware::gnss::V1_0::GnssLocation gnssLocation = convertToGnssLocation(location);
     auto ret = sGnssCbIface->gnssLocationCb(gnssLocation);
@@ -468,6 +498,8 @@ Return<bool> Gnss::injectTime(int64_t timeMs, int64_t timeReferenceMs,
         ALOGE("%s: Gnss interface is unavailable", __func__);
         return false;
     }
+    ALOGI("%s: timeMs: %lld, timeReferenceMs: %lld, uncertaintyMs: %d",
+            __func__, timeMs, timeReferenceMs, uncertaintyMs);
 
     return (mGnssIface->inject_time(timeMs, timeReferenceMs, uncertaintyMs) == 0);
 }

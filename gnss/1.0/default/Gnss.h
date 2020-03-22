@@ -172,6 +172,9 @@ class Gnss : public IGnss {
     // Values saved for resend
     static uint32_t sCapabilitiesCached;
     static uint16_t sYearOfHwCached;
+
+    static int64_t sTimeStampOffset;
+    static GpsUtcTime sLastLocationTime;
 };
 
 extern "C" IGnss* HIDL_FETCH_IGnss(const char* name);
